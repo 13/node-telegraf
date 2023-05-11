@@ -1,0 +1,17 @@
+{
+  "name": "node-telegraf",
+  "version": "1.0.0",
+  "description": "",
+  "main": "run.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.33.2",
+    "dayjs": "^1.11.7",
+    "mqtt": "^4.3.7"
+  }
+}
