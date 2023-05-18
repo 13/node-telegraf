@@ -1,11 +1,16 @@
-import * as mqtt from 'mqtt'
+#!/usr/bin/env node
 
+import { showTimestamp, mqttAddress, influxUrl, influxToken, influxOrg, influxBucket, devices } from './env.mjs'
+
+import * as mqtt from 'mqtt'
 import {InfluxDB, Point, HttpError} from '@influxdata/influxdb-client'
-import {url, token, org, bucket, mqttAddress} from './env.mjs'
 import {hostname} from 'node:os'
 import dayjs from "dayjs";
 
-const writeClient = new InfluxDB({url, token}).getWriteApi(org, bucket, 'ns')
+//const writeClient = new InfluxDB({url: influxUrl, token: influxToken}).getWriteApi(influxOrg, influxBucket, 'ns')
+const influxClient = new InfluxDB({ url: influxUrl, token: influxToken })
+let writeClient = influxClient.getWriteApi(influxOrg, influxBucket, 'ns')
+
 writeClient.useDefaultTags({server: hostname()})
 
 const mqttClient = mqtt.connect(mqttAddress)
@@ -15,47 +20,9 @@ let type = ""
 let measurement = ""
 let name = ""
 
-const showTimestamp = true;
-
 function getTime() {
   return showTimestamp ? dayjs().format("HH:mm:ss.SSS ") : "";
 }
-
-mqttClient.on('connect', function() {
-  mqttClient.subscribe('muh/sensors/#', function (err) {
-    console.log(getTime() + 'mqtt: Connected to sensors')
-    //console.log(showTimestamp() + '' + scene.name + ': MQTT ' + light1.name + ' ' + light1.subscr + ' connected')
-  })
-  mqttClient.subscribe('tasmota/tele/tasmota_74EDAC/LWT', function (err) {
-    console.log(getTime() + 'mqtt: Connected to HD')
-    //console.log(showTimestamp() + '' + scene.name + ': MQTT ' + light1.name + ' ' + light1.subscr + ' connected')
-  })
-  mqttClient.subscribe('tasmota/tele/tasmota_DC37B8/LWT', function (err) {
-    console.log(getTime() + 'mqtt: Connected to GD')
-    //console.log(showTimestamp() + '' + scene.name + ': MQTT ' + light1.name + ' ' + light1.subscr + ' connected')
-  })
-  mqttClient.subscribe('shellies/HZ_WW/status/#', function (err) {
-    console.log(getTime() + 'mqtt: Connected to HZ_WW')
-    //console.log(showTimestamp() + '' + scene.name + ': MQTT ' + light1.name + ' ' + light1.subscr + ' connected')
-  })
-  mqttClient.subscribe('shellies/shellyem3/emeter/0/#', function (err) {
-    console.log(getTime() + 'mqtt: Connected to em3')
-    //console.log(showTimestamp() + '' + scene.name + ': MQTT ' + light1.name + ' ' + light1.subscr + ' connected')
-  })
-  mqttClient.subscribe('shellies/shellyplug-s-C13431/relay/0/#', function (err) {
-    console.log(getTime() + 'mqtt: Connected to plugs')
-    //console.log(showTimestamp() + '' + scene.name + ': MQTT ' + light1.name + ' ' + light1.subscr + ' connected')
-  })
- /* mqttClient.subscribe('tasmota/sensors/#', function (err) {
-    console.log(getTime() + 'mqtt: Connected to portal-old')
-    //console.log(showTimestamp() + '' + scene.name + ': MQTT ' + light1.name + ' ' + light1.subscr + ' connected')
-  })*/
-  mqttClient.subscribe('muh/portal/#', function (err) {
-    console.log(getTime() + 'mqtt: Connected to portal')
-    //console.log(showTimestamp() + '' + scene.name + ': MQTT ' + light1.name + ' ' + light1.subscr + ' connected')
-  })
-})
-
 
 const insertInfluxDB = async (point) => {
   try {
@@ -66,6 +33,22 @@ const insertInfluxDB = async (point) => {
     console.log(getTime() + "influxdb: insert error ");
   }
 };
+
+// starting 
+console.log(getTime() + 'Starting ...')
+
+// connect to all mqtt topics
+mqttClient.on('connect', function() {
+  for (const device of devices.devices) {
+    mqttClient.subscribe(device.mqtt, function (err) {
+      if (err) {
+        console.error(getTime() + 'mqtt: Error subscribing to ' + device.name + ',' + err);
+      } else {
+        console.log(getTime() + 'mqtt: Connected to ' + device.name);
+      }
+    });
+  }
+})
 
 mqttClient.on('message', function (topic, payload) {
   let jsonObj = '';
@@ -140,6 +123,50 @@ mqttClient.on('message', function (topic, payload) {
         .tag('source', source)
         .floatField('value', payload.toString())
       insertInfluxDB(point);
+    }
+  }
+
+  // shelly motion 2
+  // shellies/shellymotion2-8CF6811074B3/status motion, lux, bat, tmp.value
+  if (/^shellies\/shellymotion2-8CF6811074B3\/status/.test(topic)) {
+    source = 'shelly'
+    for (let propName in jsonObj) {
+      const propValue = jsonObj[propName];
+      measurement = ''
+    // measurement
+      switch (propName) {
+        case 'motion':
+          measurement = propName;
+          break;
+        case 'lux':
+          measurement = 'illuminance';
+          break;
+        case 'bat':
+          measurement = 'battery';
+          break;
+        default:
+          measurement = ''
+          break;
+      }
+      if((measurement !== "") &&
+         ((typeof jsonObj.lux !== "undefined" && jsonObj.lux !== null && jsonObj.lux !== "" && Number.isInteger(propValue)) ||
+         (typeof jsonObj.bat !== "undefined" && jsonObj.bat !== null && jsonObj.bat !== "" && Number.isInteger(propValue)) )){
+        let point = new Point(measurement)
+        .tag('node', topic.split('/')[1])
+        .tag('name', name)
+        .tag('source', source)
+        .intField('value', propValue)
+        insertInfluxDB(point);
+      }
+      if((measurement !== "") &&
+         typeof jsonObj.motion !== "undefined" && jsonObj.motion !== null && jsonObj.motion !== "" && typeof propValue === 'boolean') {
+        let point = new Point(measurement)
+        .tag('node', topic.split('/')[1])
+        .tag('name', name)
+        .tag('source', source)
+        .intField('value', propValue ? 1 : 0)
+        insertInfluxDB(point);
+      }
     }
   }
 
