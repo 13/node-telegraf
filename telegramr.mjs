@@ -6,6 +6,7 @@ import * as mqtt from 'mqtt'
 import {InfluxDB, Point, HttpError} from '@influxdata/influxdb-client'
 import {hostname} from 'node:os'
 import dayjs from "dayjs";
+import chalk from 'chalk';
 
 //const writeClient = new InfluxDB({url: influxUrl, token: influxToken}).getWriteApi(influxOrg, influxBucket, 'ns')
 const influxClient = new InfluxDB({ url: influxUrl, token: influxToken })
@@ -28,14 +29,14 @@ const insertInfluxDB = async (point) => {
   try {
     await writeClient.writePoint(point);
     await writeClient.flush();
-    console.log(getTime() + "influxdb: insert " + point);
+    console.log(getTime() + 'influxdb: ' + chalk.green('insert ') + point);
   } catch (error) {
-    console.log(getTime() + "influxdb: insert error ");
+    console.log(getTime() + '' + chalk.red("influxdb: insert error "));
   }
 };
 
 // starting 
-console.log(getTime() + 'Starting ...')
+console.log(getTime() + chalk.green('Starting ...'))
 
 // connect to all mqtt topics
 mqttClient.on('connect', function() {
@@ -58,6 +59,7 @@ mqttClient.on('message', function (topic, payload) {
     jsonObj = JSON.parse(payload);
     // console.log('Payload JSON: ' + JSON.parse(payload));
   } catch (error) {
+    // console.log(getTime() + 'Payload no jsonObj ' + payload)
     // console.log('Payload not JSON');
   }
 
@@ -279,6 +281,24 @@ mqttClient.on('message', function (topic, payload) {
   }
 */
 
+  if (jsonObj.hasOwnProperty('TID') && jsonObj.TID !== '') {
+    source = 'tasmota'
+    if (jsonObj.hasOwnProperty('DS18B20') && jsonObj.DS18B20.hasOwnProperty('Temperature')) {
+      if(typeof jsonObj.DS18B20.Temperature == 'number' && !isNaN(jsonObj.DS18B20.Temperature) && 
+         typeof jsonObj.DS18B20.Temperature !== "undefined" && jsonObj.DS18B20.Temperature !== null &&
+         jsonObj.DS18B20.Temperature !== ""){
+        measurement = 'temperature';
+        type = 'ds18b20'
+        let point = new Point(measurement)
+        .tag('node', jsonObj.TID)
+        .tag('type', type)
+        .tag('typeid', jsonObj.DS18B20.Id)
+        .tag('source', source)
+        .floatField('value', jsonObj.DS18B20.Temperature)
+        insertInfluxDB(point);
+      }
+    }
+  }
   // determine source
   if (jsonObj.hasOwnProperty('N') && jsonObj.N !== '') {
     source = '868'
