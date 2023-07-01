@@ -8,7 +8,6 @@ import {hostname} from 'node:os'
 import dayjs from "dayjs";
 import chalk from 'chalk';
 
-//const writeClient = new InfluxDB({url: influxUrl, token: influxToken}).getWriteApi(influxOrg, influxBucket, 'ns')
 const influxClient = new InfluxDB({ url: influxUrl, token: influxToken })
 let writeClient = influxClient.getWriteApi(influxOrg, influxBucket, 'ns')
 
@@ -20,6 +19,27 @@ let source = ""
 let type = ""
 let measurement = ""
 let name = ""
+
+function isNumericWithDecimal(str) {
+  return /^[\d.]+$/.test(str);
+}
+
+function checkValueType(value, point) {
+  if (typeof value === 'string') {
+    if (isNumericWithDecimal(value)){
+      point = point.floatField('value', value);
+    } else {
+      point = point.stringField('value', value);
+    }
+    insertInfluxDB(point);
+  } else if (typeof value === 'number' && Number.isInteger(value)) {
+    point = point.intField('value', value);
+    insertInfluxDB(point);
+  } else if (typeof value === 'number' && !Number.isNaN(value)) {
+    point = point.floatField('value', value);
+    insertInfluxDB(point);
+  }
+}
 
 function getTime() {
   return showTimestamp ? dayjs().format("HH:mm:ss.SSS ") : "";
@@ -34,6 +54,36 @@ const insertInfluxDB = async (point) => {
     console.log(getTime() + '' + chalk.red("influxdb: insert error "));
   }
 };
+
+// rain query
+let startup = true
+let lastRain = 0
+let lastRainDB = 0
+let lastRainTmp = 0
+let queryClient = influxClient.getQueryApi(influxOrg)
+let fluxQuery = `from(bucket: "muh")
+|> range(start: -1h)
+|> filter(fn: (r) => r._measurement == "rain_m")
+|> filter(fn: (r) => r._field == "value")
+|> filter(fn: (r) => r.node == "WStation")
+|> sort(columns: ["_time"])
+|> map(fn: (r) => ({_value: r._value, _time: r._time, _field: "Regen"}))
+|> last()`
+
+queryClient.queryRows(fluxQuery, {
+  next: (row, tableMeta) => {
+    const tableObject = tableMeta.toObject(row)
+    //console.log(tableObject._value)
+    console.error(getTime() + 'influxdb2: Initial rain ' + chalk.green(tableObject._value))
+    lastRainDB = tableObject._value
+  },
+  error: (error) => {
+    //console.error('\nError', error)
+  },
+  complete: () => {
+    //console.log('\nSuccess')
+  },
+})
 
 // starting 
 console.log(getTime() + chalk.green('Starting ...'))
@@ -82,16 +132,88 @@ mqttClient.on('message', function (topic, payload) {
       }
     }
   }*/
+
+  if (/^muh\/WStation\/.+/.test(topic)) {
+    source = 'esp'
+    let measurement = ''
+    let measurementValue = ''
+    let isInt = ''
+
+    if (/\/(data\/B327)$/.test(topic)) {
+      for (const key in jsonObj) {
+        measurement = key
+        measurementValue = jsonObj[key]
+        if (typeof measurementValue === "number"){
+          if (measurement === 'rain'){
+            measurement = 'rainfall'
+            measurementValue = measurementValue.toFixed(2)
+            console.log(getTime() + 'Rain: ' + chalk.green(measurementValue) + ', DB ' + lastRainDB + ', lastRainTmp ' + lastRainTmp + ', last ' + lastRain)
+            if (startup) {
+              startup = false
+              lastRain = measurementValue
+              measurementValue = measurementValue - lastRainDB
+            } else {
+              lastRainTmp = measurementValue
+              measurementValue = measurementValue - lastRain
+              lastRain = lastRainTmp
+            }
+            if (measurementValue < 0) {
+              measurementValue = 0
+            }
+            console.log(getTime() + 'Rain: ' + chalk.green(measurementValue.toFixed(2)) + ', DB ' + lastRainDB + ', lastRainTmp ' + lastRainTmp + ', last ' + lastRain)
+          }
+          measurementValue = measurementValue.toFixed(2)
+        }
+        let point = new Point(measurement)
+          .tag('node', 'WStation')
+          .tag('source', source)
+        checkValueType(measurementValue, point)
+      }
+    }
+    if (/\/(extra)$/.test(topic)) {
+      for (const key in jsonObj) {
+        measurement = key
+        measurementValue = jsonObj[key]
+        if (typeof measurementValue === "number"){
+          measurementValue = measurementValue.toFixed(1)
+        }
+        let point = new Point(measurement)
+          .tag('node', 'WStation')
+          .tag('source', source)
+        checkValueType(measurementValue, point)
+      }
+    }
+    if (/\/(radio)$/.test(topic)) {
+      for (const key in jsonObj) {
+        measurement = key
+        measurementValue = jsonObj[key]
+        if (measurement === 'rssi'){
+          isInt = true
+          measurementValue = parseInt(measurementValue)
+        } else {
+          isInt = false
+        }
+        let point = new Point(measurement)
+          .tag('node', 'WStation')
+          .tag('source', source)
+        checkValueType(measurementValue, point)
+      }
+    }
+  }
+
+  // portal
   if (/^muh\/portal\/.+/.test(topic)) {
     source = 'tasmota'
     if (/\/(json)$/.test(topic)) {
       if(typeof jsonObj.state == 'number' && !isNaN(jsonObj.state) && Number.isInteger(jsonObj.state) &&
          typeof jsonObj.state !== "undefined" && jsonObj.state !== null && jsonObj.state !== ""){
+        if (topic.toString().split('/')[2] !== "GDW"){
         let point = new Point('portal')
           .tag('node', topic.toString().split('/')[2])
           .tag('source', source)
           .intField('value', jsonObj.state.toString())
         insertInfluxDB(point);
+        }
       }
       // RFID uid
       if(typeof jsonObj.uid !== "undefined" && jsonObj.uid !== null && jsonObj.uid !== ""){
