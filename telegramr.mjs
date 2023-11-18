@@ -15,6 +15,12 @@ const bot = new TelegramBot(tgToken, {polling: false})
 
 const mqttClient = mqtt.connect(mqttAddress)
 
+const portals = {}
+
+function getStatus(statusCode) {
+    return statusCode === 0 ? 'opened' : statusCode === 1 ? 'closed' : 'unknown';
+}
+
 function getTime() {
   return showTimestamp ? dayjs().format("HH:mm:ss.SSS ") : "";
 }
@@ -41,10 +47,12 @@ async function sendTelegram(name_long, img=null){
     var img_url = wcUrl1
     var img_path = '/tmp/urlCam-' + dayjs(new Date()).format('YYMMDD-HHmmssSSS')  + '.jpg'
     await downloadImage(name_long,img_url,img_path)
-    //console.log(getTime() + '' + scene + ': Telegram image sent ' + name_long + ' ' + img_path)
+    // DEBUG
+    console.log(getTime() + 'telegram: image sent ' + name_long + ' ' + img_path)
     bot.sendPhoto(tgMsgId, img_path,{caption : name_long + '\n ' + dayjs(new Date()).format('HH:mm:ss.SSS')})
   } else {
-    //console.log(getTime() + '' + scene + ': Telegram sent ' + name_long.substring(0, name_long.indexOf('\n')))
+    // DEBUG
+    console.log(getTime() + 'telegram: sent ' + name_long.split(':')[1].trim())
     bot.sendMessage(tgMsgId, name_long + ' ' + dayjs(new Date()).format('HH:mm:ss.SSS'))
     //bot.sendMessage(tgMsgId, name_long ' ' + dayjs(new Date()).format('HH:mm:ss.SSS'))
   }
@@ -70,11 +78,14 @@ mqttClient.on('connect', function() {
 
 mqttClient.on('message', function (topic, payload) {
   let jsonObj = '';
+  // DEBUG
   //console.log(getTime() + 'mqtt: Topic ' + topic.toString() + ', Payload ' + payload.toString())
 
   try {
     jsonObj = JSON.parse(payload);
-    // console.log('Payload JSON: ' + JSON.parse(payload));
+    // DEBUG
+    //console.log('jsonObj: ' + jsonObj.state);
+    //console.log('Payload JSON: ' + JSON.parse(payload));
   } catch (error) {
     // console.log(getTime() + 'Payload no jsonObj ' + payload)
     // console.log('Payload not JSON');
@@ -87,7 +98,17 @@ mqttClient.on('message', function (topic, payload) {
         if (topic.toString().split('/')[2] === 'HDB'){
           sendTelegram('Portal: ' + topic.toString().split('/')[2] + ' ' + jsonObj.state.toString(), 1)
         } else {
-          sendTelegram('Portal: ' + topic.toString().split('/')[2] + ' ' + jsonObj.state.toString())
+          if (['G', 'GD', 'HD', 'GDL', 'HDL'].includes(topic.toString().split('/')[2])){
+            if (!(topic.toString().split('/')[2] in portals)){
+              portals[topic.toString().split('/')[2]] = jsonObj.state
+            }
+            if (portals[topic.toString().split('/')[2]] != jsonObj.state.toString()){
+              portals[topic.toString().split('/')[2]] = jsonObj.state
+              sendTelegram('Portal: ' + topic.toString().split('/')[2] + ' ' + getStatus(jsonObj.state))
+            }
+            // DEBUG
+            //console.log(getTime() + 'portals: ' + Object.entries(portals).map(([key, value]) => `${key}: ${value}`).join(', '));
+          }
         }
       }
       // RFID uid
@@ -100,7 +121,7 @@ mqttClient.on('message', function (topic, payload) {
   // em3
   if (/^shellies\/shellyem3\/emeter\/0\/.+/.test(topic)) {
     if (/\/power$/.test(topic.toString())) {
-      if (payload.toString() > 2800) {
+      if (payload.toString() > 3000) {
         sendTelegram('EM3: ' + topic.toString().substring(topic.toString().lastIndexOf('/') + 1) + ' ' + payload.toString())
       }
     }
