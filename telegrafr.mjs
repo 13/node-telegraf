@@ -21,7 +21,7 @@ let measurement = ""
 let name = ""
 
 function isNumericWithDecimal(str) {
-  return /^[\d.]+$/.test(str);
+  return /^(-?\d+(\.\d+)?)$/.test(str);
 }
 
 function checkValueType(value, point) {
