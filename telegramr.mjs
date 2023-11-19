@@ -17,6 +17,9 @@ const mqttClient = mqtt.connect(mqttAddress)
 
 const portals = {}
 
+let MAX_WATT = 3000;
+let tempWatt = 0;
+
 function getStatus(statusCode) {
     return statusCode === 0 ? 'opened' : statusCode === 1 ? 'closed' : 'unknown';
 }
@@ -121,8 +124,13 @@ mqttClient.on('message', function (topic, payload) {
   // em3
   if (/^shellies\/shellyem3\/emeter\/0\/.+/.test(topic)) {
     if (/\/power$/.test(topic.toString())) {
-      if (payload.toString() > 3000) {
-        sendTelegram('EM3: ' + topic.toString().substring(topic.toString().lastIndexOf('/') + 1) + ' ' + payload.toString())
+      if (payload.toString() >= MAX_WATT) {
+        if (payload.toString() >= tmpWatt){
+          tempWatt = payload.toString();
+          sendTelegram('EM3: ' + topic.toString().substring(topic.toString().lastIndexOf('/') + 1) + ' ' + payload.toString())
+        } else{
+          tempWatt = 0;
+        }
       }
     }
   }
