@@ -17,11 +17,30 @@ const mqttClient = mqtt.connect(mqttAddress)
 
 const portals = {}
 
-let MAX_WATT = 3000;
-let tempWatt = 0;
+const MAX_WATT = 3000;
+let tempMaxWatt = 0;
 
-function getStatus(statusCode) {
-    return statusCode === 0 ? 'opened' : statusCode === 1 ? 'closed' : 'unknown';
+const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
+const isDebug = process.argv.includes('--debug');
+
+function verbose(msg){
+  if (isVerbose) {
+    console.log(msg);
+  }
+}
+
+function debug(msg){
+  if (isDebug) {
+    console.log(msg);
+  }
+}
+
+function getDeviceStatus(statusCode) {
+    return statusCode === 0 ? 'OFF' : statusCode === 1 ? 'ON' : 'unknown';
+}
+
+function getPortalStatus(statusCode) {
+    return statusCode === 0 ? 'OPENED' : statusCode === 1 ? 'CLOSED' : 'unknown';
 }
 
 function getTime() {
@@ -50,19 +69,17 @@ async function sendTelegram(name_long, img=null){
     var img_url = wcUrl1
     var img_path = '/tmp/urlCam-' + dayjs(new Date()).format('YYMMDD-HHmmssSSS')  + '.jpg'
     await downloadImage(name_long,img_url,img_path)
-    // DEBUG
-    console.log(getTime() + 'telegram: image sent ' + name_long + ' ' + img_path)
+    debug(getTime() + 'telegram: image sent ' + name_long + ' ' + img_path)
     bot.sendPhoto(tgMsgId, img_path,{caption : name_long + '\n ' + dayjs(new Date()).format('HH:mm:ss.SSS')})
   } else {
-    // DEBUG
-    console.log(getTime() + 'telegram: sent ' + name_long.split(':')[1].trim())
+    debug(getTime() + 'telegram: sent ' + name_long.replace(/:/g, ''));
     bot.sendMessage(tgMsgId, name_long + ' ' + dayjs(new Date()).format('HH:mm:ss.SSS'))
     //bot.sendMessage(tgMsgId, name_long ' ' + dayjs(new Date()).format('HH:mm:ss.SSS'))
   }
 }
 
 // starting 
-console.log(getTime() + chalk.green('Starting ...'))
+console.log(getTime() + chalk.green('Starting telegramr ...'))
 
 // connect to all mqtt topics
 mqttClient.on('connect', function() {
@@ -81,17 +98,18 @@ mqttClient.on('connect', function() {
 
 mqttClient.on('message', function (topic, payload) {
   let jsonObj = '';
-  // DEBUG
+  // VERBOSE
   //console.log(getTime() + 'mqtt: Topic ' + topic.toString() + ', Payload ' + payload.toString())
+  verbose(getTime() + 'mqtt: Topic ' + topic.toString() + ', Payload ' + payload.toString())
 
   try {
     jsonObj = JSON.parse(payload);
     // DEBUG
-    //console.log('jsonObj: ' + jsonObj.state);
-    //console.log('Payload JSON: ' + JSON.parse(payload));
+    debug(getTime() + 'jsonObj: ' + jsonObj.state);
+    debug(getTime() + 'Payload JSON: ' + JSON.parse(payload));
   } catch (error) {
-    // console.log(getTime() + 'Payload no jsonObj ' + payload)
-    // console.log('Payload not JSON');
+    debug(getTime() + 'Payload no jsonObj ' + payload)
+    debug('Payload not JSON');
   }
 
   if (/^muh\/portal\/.+/.test(topic)) {
@@ -107,10 +125,10 @@ mqttClient.on('message', function (topic, payload) {
             }
             if (portals[topic.toString().split('/')[2]] != jsonObj.state.toString()){
               portals[topic.toString().split('/')[2]] = jsonObj.state
-              sendTelegram('Portal: ' + topic.toString().split('/')[2] + ' ' + getStatus(jsonObj.state))
+              sendTelegram('Portal: ' + topic.toString().split('/')[2] + ' ' + getPortalStatus(jsonObj.state))
             }
             // DEBUG
-            //console.log(getTime() + 'portals: ' + Object.entries(portals).map(([key, value]) => `${key}: ${value}`).join(', '));
+            //debug(getTime() + 'portals: ' + Object.entries(portals).map(([key, value]) => `${key}: ${value}`).join(', '));
           }
         }
       }
@@ -125,13 +143,23 @@ mqttClient.on('message', function (topic, payload) {
   if (/^shellies\/shellyem3\/emeter\/0\/.+/.test(topic)) {
     if (/\/power$/.test(topic.toString())) {
       if (payload.toString() >= MAX_WATT) {
-        if (payload.toString() >= tmpWatt){
-          tempWatt = payload.toString();
+        if (payload.toString() >= tempMaxWatt){
+          tempMaxWatt = payload.toString();
           sendTelegram('EM3: ' + topic.toString().substring(topic.toString().lastIndexOf('/') + 1) + ' ' + payload.toString())
         } else{
-          tempWatt = 0;
+          if ((tempMaxWatt - payload.toString()) > 500){
+            tempMaxWatt = 0;
+          }
         }
       }
+    }
+  }
+
+  // hz_dg shelly
+  if (/^shellies\/HZ_DG\/status\/switch:0$/.test(topic)) {
+    if (jsonObj.hasOwnProperty("output") && typeof jsonObj.output === "boolean" &&
+       (typeof jsonObj.output !== "undefined" && jsonObj.output !== null && jsonObj.output !== "")) {
+      sendTelegram('HZ_DG: ' + getDeviceStatus(jsonObj.output.toString()));
     }
   }
   
