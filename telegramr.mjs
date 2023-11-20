@@ -177,6 +177,18 @@ mqttClient.on('message', function (topic, payload) {
       }
     }
   }
+
+  // PIR zigbee2mqtt
+  if (/^zigbee2mqtt\/0x00124b0028945b32\/.+/.test(topic)) {
+    if (/\/occupancy$/.test(topic.toString())) {
+      if (jsonObj.hasOwnProperty("occupancy") && typeof jsonObj.occupancy === "boolean" &&
+         (typeof jsonObj.occupancy !== "undefined" && jsonObj.occupancy !== null && jsonObj.occupancy !== "")) {
+        if (jsonObj.occupancy){
+          sendTelegram('DG_PIR: ' + getDeviceStatus(jsonObj.occupancy.toString()));
+        }
+      }
+    }
+  }
   
 })
 
