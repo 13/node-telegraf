@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-//process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
+// fix ETELEGRAM: 400 Bad Request: invalid file HTTP URL specified: URL host is empty
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
 // https://github.com/yagop/node-telegram-bot-api/issues/1071
 process.env.NTBA_FIX_350 = true;
 
@@ -178,16 +179,19 @@ mqttClient.on('message', function (topic, payload) {
     }
   }
 
-  // PIR zigbee2mqtt
-  if (/^zigbee2mqtt\/0x00124b0028945b32\/.+/.test(topic)) {
-    if (/\/occupancy$/.test(topic.toString())) {
-      if (jsonObj.hasOwnProperty("occupancy") && typeof jsonObj.occupancy === "boolean" &&
-         (typeof jsonObj.occupancy !== "undefined" && jsonObj.occupancy !== null && jsonObj.occupancy !== "")) {
-        if (jsonObj.occupancy){
-          sendTelegram('DG_PIR: ' + getDeviceStatus(jsonObj.occupancy.toString()));
-        }
+  // pir zigbee2mqtt
+  if (/^zigbee2mqtt\/0xa4c138a2e0cec4a2$/.test(topic)) {
+    if (jsonObj.hasOwnProperty("occupancy") && typeof jsonObj.occupancy === "boolean" &&
+       (typeof jsonObj.occupancy !== "undefined" && jsonObj.occupancy !== null && jsonObj.occupancy !== "")) {
+      if (jsonObj.occupancy){
+        sendTelegram('DG_PIR: ' + getDeviceStatus(jsonObj.occupancy.toString()));
       }
     }
+  }
+
+  // telegram bot broadcast
+  if (/^muh\/telegram\/msg$/.test(topic)) {
+    sendTelegram(payload.toString());
   }
   
 })
