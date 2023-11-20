@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
+//process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
+// https://github.com/yagop/node-telegram-bot-api/issues/1071
+process.env.NTBA_FIX_350 = true;
 
 import { showTimestamp, mqttAddress, devices, tgToken, tgMsgId, wcUrl1 } from './env.mjs'
 
@@ -20,6 +22,8 @@ const portals = {}
 const MAX_WATT = 3000;
 let tempMaxWatt = 0;
 
+let tempStateHZDG;
+
 const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
 const isDebug = process.argv.includes('--debug');
 
@@ -36,7 +40,15 @@ function debug(msg){
 }
 
 function getDeviceStatus(statusCode) {
-    return statusCode === 0 ? 'OFF' : statusCode === 1 ? 'ON' : 'unknown';
+  const normalizedInput = String(statusCode).toLowerCase();
+  const map = { true: 'ON', false: 'OFF' };
+  const res = map[normalizedInput];
+
+  if (res === undefined) {
+    res = "unknown";
+  }
+
+  return res;
 }
 
 function getPortalStatus(statusCode) {
@@ -55,7 +67,7 @@ function downloadImage(name_long,img_url,img_path){
     }
     img_download.image(img_options)
       .then(({ filename }) => {
-        console.log(getTime() + ': Image downloaded ' + filename)
+        console.log(getTime() + 'telegram: image downloaded to ' + filename)
       })
       .catch((err) => console.error(err))
     setTimeout(()=>{
@@ -159,7 +171,10 @@ mqttClient.on('message', function (topic, payload) {
   if (/^shellies\/HZ_DG\/status\/switch:0$/.test(topic)) {
     if (jsonObj.hasOwnProperty("output") && typeof jsonObj.output === "boolean" &&
        (typeof jsonObj.output !== "undefined" && jsonObj.output !== null && jsonObj.output !== "")) {
-      sendTelegram('HZ_DG: ' + getDeviceStatus(jsonObj.output.toString()));
+      if (tempStateHZDG != jsonObj.output){
+        tempStateHZDG = jsonObj.output;
+        sendTelegram('HZ_DG: ' + getDeviceStatus(jsonObj.output.toString()));
+      }
     }
   }
   
