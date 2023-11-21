@@ -22,8 +22,9 @@ const portals = {}
 
 const MAX_WATT = 3000;
 let tempMaxWatt = 0;
+let deviceName;
 
-let tempStateHZDG;
+const updatedDevices = {};
 
 const isVerbose = process.argv.includes('--verbose') || process.argv.includes('-v');
 const isDebug = process.argv.includes('--debug');
@@ -168,29 +169,30 @@ mqttClient.on('message', function (topic, payload) {
     }
   }
 
-  // hz_dg shelly
-  if (/^shellies\/HZ_DG\/status\/switch:0$/.test(topic)) {
+  deviceName = 'HZ_DG';
+  if (new RegExp(devices.devices.find(device => device.name === deviceName).mqtt.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).test(topic)){
     if (jsonObj.hasOwnProperty("output") && typeof jsonObj.output === "boolean" &&
        (typeof jsonObj.output !== "undefined" && jsonObj.output !== null && jsonObj.output !== "")) {
-      if (tempStateHZDG != jsonObj.output){
-        tempStateHZDG = jsonObj.output;
-        sendTelegram('HZ_DG: ' + getDeviceStatus(jsonObj.output.toString()));
+      if (devices.devices.find(device => device.name === deviceName).lastOutput != jsonObj.output){
+        devices.devices.find(device => device.name === deviceName).lastOutput = jsonObj.output;
+        sendTelegram(deviceName + ': ' + getDeviceStatus(jsonObj.output.toString()));
       }
     }
   }
 
-  // pir zigbee2mqtt
-  if (/^zigbee2mqtt\/0xa4c138a2e0cec4a2$/.test(topic)) {
+  deviceName = 'DG_PIR';
+  if (new RegExp(devices.devices.find(device => device.name === deviceName).mqtt.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).test(topic)){
     if (jsonObj.hasOwnProperty("occupancy") && typeof jsonObj.occupancy === "boolean" &&
        (typeof jsonObj.occupancy !== "undefined" && jsonObj.occupancy !== null && jsonObj.occupancy !== "")) {
       if (jsonObj.occupancy){
-        sendTelegram('DG_PIR: ' + getDeviceStatus(jsonObj.occupancy.toString()));
+        sendTelegram(deviceName + ': ' + getDeviceStatus(jsonObj.occupancy.toString()));
       }
     }
   }
 
-  // telegram bot broadcast
-  if (/^muh\/telegram\/msg$/.test(topic)) {
+  deviceName = 'TelegramBot';
+  //if (/^muh\/telegram\/msg$/.test(topic)) {
+  if (new RegExp(devices.devices.find(device => device.name === deviceName).mqtt.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).test(topic)){
     sendTelegram(payload.toString());
   }
   
