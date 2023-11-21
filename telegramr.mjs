@@ -93,7 +93,9 @@ async function sendTelegram(name_long, img=null){
 }
 
 // starting 
-console.log(getTime() + chalk.green('Starting telegramr ...'))
+console.log(getTime() + chalk.green('telegramr: Starting ...'))
+verbose(getTime() + chalk.yellow('mode: verbose'))
+debug(getTime() + chalk.yellow('mode: debug'))
 
 // connect to all mqtt topics
 mqttClient.on('connect', function() {
@@ -101,9 +103,9 @@ mqttClient.on('connect', function() {
     if (device.telegram) {
       mqttClient.subscribe(device.mqtt, function (err) {
         if (err) {
-          console.error(getTime() + 'mqtt: Error subscribing to ' + device.name + ',' + err);
+          console.error(getTime() + 'mqtt: Error subscribing to ' + device.longName + ',' + err);
         } else {
-          console.log(getTime() + 'mqtt: Connected to ' + device.name);
+          console.log(getTime() + 'mqtt: Connected to ' + device.longName);
         }
       });
     }
@@ -154,15 +156,17 @@ mqttClient.on('message', function (topic, payload) {
   }
 
   // em3
-  if (/^shellies\/shellyem3\/emeter\/0\/.+/.test(topic)) {
+  deviceName = 'em3';
+  if (new RegExp(devices.devices.find(device => device.name === deviceName).mqtt.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).test(topic)){
+  //if (/^shellies\/shellyem3\/emeter\/0\/.+/.test(topic)) {
     if (/\/power$/.test(topic.toString())) {
-      if (payload.toString() >= MAX_WATT) {
-        if (payload.toString() >= tempMaxWatt){
-          tempMaxWatt = payload.toString();
+      if (payload.toString() >= devices.devices.find(device => device.name === deviceName).maxWatt) {
+        if (payload.toString() >= devices.devices.find(device => device.name === deviceName).lastMaxWatt){
+          devices.devices.find(device => device.name === deviceName).lastMaxWatt = payload.toString();
           sendTelegram('EM3: ' + topic.toString().substring(topic.toString().lastIndexOf('/') + 1) + ' ' + payload.toString())
         } else{
-          if ((tempMaxWatt - payload.toString()) > 500){
-            tempMaxWatt = 0;
+          if ((payload.toString() >= devices.devices.find(device => device.name === deviceName).lastMaxWatt - payload.toString()) > 500){
+            devices.devices.find(device => device.name === deviceName).lastMaxWatt = 0;
           }
         }
       }
