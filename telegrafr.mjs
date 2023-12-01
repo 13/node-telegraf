@@ -113,6 +113,9 @@ mqttClient.on('message', function (topic, payload) {
     // console.log('Payload not JSON');
   }
 
+  if (jsonObj === null && jsonObj === undefined) {
+  jsonObj = '';
+  }
   // portal set offline if again online put online
   /*if (/^tasmota\/tele\/tasmota_DC37B8\/LWT/.test(topic)) {
     if (payload.toString() === 'Offline'){
@@ -427,7 +430,7 @@ mqttClient.on('message', function (topic, payload) {
     }
   }
 */
-
+if (jsonObj !== null && jsonObj !== undefined) {
   if (jsonObj.hasOwnProperty('TID') && jsonObj.TID !== '') {
     source = 'tasmota'
     if (jsonObj.hasOwnProperty('DS18B20') && jsonObj.DS18B20.hasOwnProperty('Temperature')) {
@@ -533,6 +536,7 @@ mqttClient.on('message', function (topic, payload) {
         // console.log('nothing to do')
     }
     }
+  }
 }
   
 })
