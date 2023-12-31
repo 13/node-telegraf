@@ -23,6 +23,7 @@ const portals = {}
 const MAX_WATT = 3000;
 let tempMaxWatt = 0;
 let deviceName;
+let deviceNameLong;
 
 const updatedDevices = {};
 
@@ -199,6 +200,14 @@ mqttClient.on('message', function (topic, payload) {
   if (new RegExp(devices.devices.find(device => device.name === deviceName).mqtt.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).test(topic)){
     sendTelegram(payload.toString());
   }
+
+  deviceNameLong = 'Garage';
+  if (/^muh\/home\/garage\/isFull$/.test(topic)) {
+  //if (new RegExp(devices.devices.find(device => device.name === deviceName).mqtt.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).test(topic)){
+    sendTelegram(deviceNameLong + ": " + payload.toString());
+  }
+
+
   
 })
 
