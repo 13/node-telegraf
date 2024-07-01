@@ -3,15 +3,15 @@
 import { showTimestamp, mqttAddress, influxUrl, influxToken, influxOrg, influxBucket, devices } from './env.mjs'
 
 import * as mqtt from 'mqtt'
-import {InfluxDB, Point, HttpError} from '@influxdata/influxdb-client'
-import {hostname} from 'node:os'
+import { InfluxDB, Point, HttpError } from '@influxdata/influxdb-client'
+import { hostname } from 'node:os'
 import dayjs from "dayjs";
 import chalk from 'chalk';
 
 const influxClient = new InfluxDB({ url: influxUrl, token: influxToken })
 let writeClient = influxClient.getWriteApi(influxOrg, influxBucket, 'ns')
 
-writeClient.useDefaultTags({server: hostname()})
+writeClient.useDefaultTags({ server: hostname() })
 
 const mqttClient = mqtt.connect(mqttAddress)
 
@@ -26,7 +26,7 @@ function isNumericWithDecimal(str) {
 
 function checkValueType(value, point) {
   if (typeof value === 'string') {
-    if (isNumericWithDecimal(value)){
+    if (isNumericWithDecimal(value)) {
       point = point.floatField('value', value);
     } else {
       point = point.stringField('value', value);
@@ -65,7 +65,7 @@ let fluxQuery = `from(bucket: "muh")
 |> range(start: -1h)
 |> filter(fn: (r) => r._measurement == "rain_m")
 |> filter(fn: (r) => r._field == "value")
-|> filter(fn: (r) => r.node == "WStation")
+|> filter(fn: (r) => r.node == "wst")
 |> sort(columns: ["_time"])
 |> map(fn: (r) => ({_value: r._value, _time: r._time, _field: "Regen"}))
 |> last()`
@@ -91,7 +91,7 @@ console.log(getTime() + chalk.green('Starting ...'))
 // connect to all mqtt topics
 mqttClient.on('connect', function() {
   for (const device of devices.devices) {
-    mqttClient.subscribe(device.mqtt, function (err) {
+    mqttClient.subscribe(device.mqtt, function(err) {
       if (err) {
         console.error(getTime() + 'mqtt: Error subscribing to ' + device.name + ',' + err);
       } else {
@@ -101,7 +101,7 @@ mqttClient.on('connect', function() {
   }
 })
 
-mqttClient.on('message', function (topic, payload) {
+mqttClient.on('message', function(topic, payload) {
   let jsonObj = '';
   console.log(getTime() + 'mqtt: Topic ' + topic.toString() + ', Payload ' + payload.toString())
 
@@ -114,7 +114,7 @@ mqttClient.on('message', function (topic, payload) {
   }
 
   if (jsonObj === null && jsonObj === undefined) {
-  jsonObj = '';
+    jsonObj = '';
   }
   // portal set offline if again online put online
   /*if (/^tasmota\/tele\/tasmota_DC37B8\/LWT/.test(topic)) {
@@ -135,8 +135,29 @@ mqttClient.on('message', function (topic, payload) {
       }
     }
   }*/
+  if (/^muh\/wsr\/json/.test(topic)) {
+    //if (/^muh\/wsr\/.+/.test(topic)) {
+    //if (/\/(json)$/.test(topic)) {
+    source = 'esp'
+    let measurement = ''
+    let measurementValue = ''
+    //console.log('WSR Payload JSON: ' + JSON.parse(payload));
 
-  if (/^muh\/WStation\/.+/.test(topic)) {
+    for (const key in jsonObj) {
+      measurement = key
+      measurementValue = jsonObj[key]
+      if (typeof measurementValue === "number") {
+        measurementValue = measurementValue.toFixed(2)
+      }
+      let point = new Point(measurement)
+        .tag('node', 'wsr')
+        .tag('source', source)
+      checkValueType(measurementValue, point)
+    }
+    //}
+  }
+
+  if (/^muh\/wst\/.+/.test(topic)) {
     source = 'esp'
     let measurement = ''
     let measurementValue = ''
@@ -146,8 +167,8 @@ mqttClient.on('message', function (topic, payload) {
       for (const key in jsonObj) {
         measurement = key
         measurementValue = jsonObj[key]
-        if (typeof measurementValue === "number"){
-          if (measurement === 'rain'){
+        if (typeof measurementValue === "number") {
+          if (measurement === 'rain') {
             measurement = 'rainfall'
             measurementValue = measurementValue.toFixed(2)
             console.log(getTime() + 'Rain: ' + chalk.green(measurementValue) + ', DB ' + lastRainDB + ', lastRainTmp ' + lastRainTmp + ', last ' + lastRain)
@@ -168,7 +189,7 @@ mqttClient.on('message', function (topic, payload) {
           measurementValue = measurementValue.toFixed(2)
         }
         let point = new Point(measurement)
-          .tag('node', 'WStation')
+          .tag('node', 'wst')
           .tag('source', source)
         checkValueType(measurementValue, point)
       }
@@ -177,11 +198,11 @@ mqttClient.on('message', function (topic, payload) {
       for (const key in jsonObj) {
         measurement = key
         measurementValue = jsonObj[key]
-        if (typeof measurementValue === "number"){
+        if (typeof measurementValue === "number") {
           measurementValue = measurementValue.toFixed(1)
         }
         let point = new Point(measurement)
-          .tag('node', 'WStation')
+          .tag('node', 'wst')
           .tag('source', source)
         checkValueType(measurementValue, point)
       }
@@ -190,14 +211,14 @@ mqttClient.on('message', function (topic, payload) {
       for (const key in jsonObj) {
         measurement = key
         measurementValue = jsonObj[key]
-        if (measurement === 'rssi'){
+        if (measurement === 'rssi') {
           isInt = true
           measurementValue = parseInt(measurementValue)
         } else {
           isInt = false
         }
         let point = new Point(measurement)
-          .tag('node', 'WStation')
+          .tag('node', 'wst')
           .tag('source', source)
         checkValueType(measurementValue, point)
       }
@@ -208,18 +229,18 @@ mqttClient.on('message', function (topic, payload) {
   if (/^muh\/portal\/.+/.test(topic)) {
     source = 'tasmota'
     if (/\/(json)$/.test(topic)) {
-      if(typeof jsonObj.state == 'number' && !isNaN(jsonObj.state) && Number.isInteger(jsonObj.state) &&
-         typeof jsonObj.state !== "undefined" && jsonObj.state !== null && jsonObj.state !== ""){
-        if (topic.toString().split('/')[2] !== "GDW"){
-        let point = new Point('portal')
-          .tag('node', topic.toString().split('/')[2])
-          .tag('source', source)
-          .intField('value', jsonObj.state.toString())
-        insertInfluxDB(point);
+      if (typeof jsonObj.state == 'number' && !isNaN(jsonObj.state) && Number.isInteger(jsonObj.state) &&
+        typeof jsonObj.state !== "undefined" && jsonObj.state !== null && jsonObj.state !== "") {
+        if (topic.toString().split('/')[2] !== "GDW") {
+          let point = new Point('portal')
+            .tag('node', topic.toString().split('/')[2])
+            .tag('source', source)
+            .intField('value', jsonObj.state.toString())
+          insertInfluxDB(point);
         }
       }
       // RFID uid
-      if(typeof jsonObj.uid !== "undefined" && jsonObj.uid !== null && jsonObj.uid !== ""){
+      if (typeof jsonObj.uid !== "undefined" && jsonObj.uid !== null && jsonObj.uid !== "") {
         let point = new Point('rfid')
           .tag('node', topic.toString().split('/')[2])
           .tag('destination', jsonObj.source)
@@ -241,6 +262,41 @@ mqttClient.on('message', function (topic, payload) {
     }
   }*/
 
+  // tasmota 3em
+  if (/^muh\/power\/3em.+/.test(topic)) {
+    source = 'tasmota'
+    let measurement = ''
+    let measurementValue = ''
+    if (jsonObj !== undefined && jsonObj !== null && jsonObj !== '') {
+      if (jsonObj.hasOwnProperty('total')) {
+        console.log(getTime() + 'mqtt: ' + chalk.yellow(jsonObj.total.toString()) + ' 3em');
+        measurement = 'power'
+        measurementValue = parseFloat(jsonObj.total.toString())
+        if ((measurement !== undefined || measurement !== null || measurement !== '') ||
+          (measurementValue !== undefined || measurementValue !== null || measurementValue !== '')) {
+          let point = new Point(measurement)
+            .tag('node', '3em')
+            .tag('source', source)
+            .floatField('value', measurementValue)
+          insertInfluxDB(point);
+        }
+      }
+      if (jsonObj.hasOwnProperty('total_zero')) {
+        console.log(getTime() + 'mqtt: ' + chalk.yellow(jsonObj.total_zero.toString()) + ' 3em');
+        measurement = 'power_zero'
+        measurementValue = parseInt(jsonObj.total_zero.toString())
+        if ((measurement !== undefined || measurement !== null || measurement !== '') ||
+          (measurementValue !== undefined || measurementValue !== null || measurementValue !== '')) {
+          let point = new Point(measurement)
+            .tag('node', '3em')
+            .tag('source', source)
+            .intField('value', measurementValue)
+          insertInfluxDB(point);
+        }
+      }
+    }
+  }
+
   // tasmota power
   if (/^tasmota\/tele\/.+/.test(topic)) {
     source = 'tasmota'
@@ -251,14 +307,27 @@ mqttClient.on('message', function (topic, payload) {
         console.log(getTime() + 'mqtt: ' + chalk.yellow(jsonObj.ENERGY.Power.toString()) + ' ' + topic.toString().match(/tasmota_(\w+)/)?.[1]);
         measurement = 'power'
         measurementValue = parseFloat(jsonObj.ENERGY.Power.toString())
-    if ((measurement !== undefined || measurement !== null || measurement !== '') || 
-        (measurementValue !== undefined || measurementValue !== null || measurementValue !== '')) {
-      let point = new Point(measurement)
-        .tag('node', topic.toString().match(/tasmota_(\w+)/)?.[1])
-        .tag('source', source)
-        .floatField('value', measurementValue)
-      insertInfluxDB(point);
-    }
+        if ((measurement !== undefined || measurement !== null || measurement !== '') ||
+          (measurementValue !== undefined || measurementValue !== null || measurementValue !== '')) {
+          let point = new Point(measurement)
+            .tag('node', topic.toString().match(/tasmota_(\w+)/)?.[1])
+            .tag('source', source)
+            .floatField('value', measurementValue)
+          insertInfluxDB(point);
+        }
+      }
+      if (jsonObj.hasOwnProperty('ENERGY') && jsonObj.ENERGY.hasOwnProperty('Total')) {
+        console.log(getTime() + 'mqtt: ' + chalk.yellow(jsonObj.ENERGY.Power.toString()) + ' ' + topic.toString().match(/tasmota_(\w+)/)?.[1]);
+        measurement = 'kwh'
+        measurementValue = parseFloat(jsonObj.ENERGY.Total.toString())
+        if ((measurement !== undefined || measurement !== null || measurement !== '') ||
+          (measurementValue !== undefined || measurementValue !== null || measurementValue !== '')) {
+          let point = new Point(measurement)
+            .tag('node', topic.toString().match(/tasmota_(\w+)/)?.[1])
+            .tag('source', source)
+            .floatField('value', measurementValue)
+          insertInfluxDB(point);
+        }
       }
     } else {
       console.log(getTime() + 'mqttXX: ' + chalk.green(payload.toString()) + ' ' + topic.toString().match(/tasmota_(\w+)/)?.[1]);
@@ -285,7 +354,7 @@ mqttClient.on('message', function (topic, payload) {
     for (let propName in jsonObj) {
       const propValue = jsonObj[propName];
       measurement = ''
-    // measurement
+      // measurement
       switch (propName) {
         case 'motion':
           measurement = propName;
@@ -300,23 +369,23 @@ mqttClient.on('message', function (topic, payload) {
           measurement = ''
           break;
       }
-      if((measurement !== "") &&
-         ((typeof jsonObj.lux !== "undefined" && jsonObj.lux !== null && jsonObj.lux !== "" && Number.isInteger(propValue)) ||
-         (typeof jsonObj.bat !== "undefined" && jsonObj.bat !== null && jsonObj.bat !== "" && Number.isInteger(propValue)) )){
+      if ((measurement !== "") &&
+        ((typeof jsonObj.lux !== "undefined" && jsonObj.lux !== null && jsonObj.lux !== "" && Number.isInteger(propValue)) ||
+          (typeof jsonObj.bat !== "undefined" && jsonObj.bat !== null && jsonObj.bat !== "" && Number.isInteger(propValue)))) {
         let point = new Point(measurement)
-        .tag('node', topic.split('/')[1])
-        .tag('name', name)
-        .tag('source', source)
-        .intField('value', propValue)
+          .tag('node', topic.split('/')[1])
+          .tag('name', name)
+          .tag('source', source)
+          .intField('value', propValue)
         insertInfluxDB(point);
       }
-      if((measurement !== "") &&
-         typeof jsonObj.motion !== "undefined" && jsonObj.motion !== null && jsonObj.motion !== "" && typeof propValue === 'boolean') {
+      if ((measurement !== "") &&
+        typeof jsonObj.motion !== "undefined" && jsonObj.motion !== null && jsonObj.motion !== "" && typeof propValue === 'boolean') {
         let point = new Point(measurement)
-        .tag('node', topic.split('/')[1])
-        .tag('name', name)
-        .tag('source', source)
-        .intField('value', propValue ? 1 : 0)
+          .tag('node', topic.split('/')[1])
+          .tag('name', name)
+          .tag('source', source)
+          .intField('value', propValue ? 1 : 0)
         insertInfluxDB(point);
       }
     }
@@ -355,16 +424,16 @@ mqttClient.on('message', function (topic, payload) {
         console.log("noth")
         break;
     }
-      if(typeof jsonObj.tC == 'number' && !isNaN(jsonObj.tC) && !Number.isInteger(jsonObj.tC) &&
-         typeof jsonObj.tC !== "undefined" && jsonObj.tC!== null && jsonObj.tC !== ""){
-        let point = new Point(measurement)
+    if (typeof jsonObj.tC == 'number' && !isNaN(jsonObj.tC) && !Number.isInteger(jsonObj.tC) &&
+      typeof jsonObj.tC !== "undefined" && jsonObj.tC !== null && jsonObj.tC !== "") {
+      let point = new Point(measurement)
         .tag('node', topic.split('/')[1])
         .tag('name', name)
         .tag('type', type)
         .tag('source', source)
         .floatField('value', jsonObj.tC)
-        insertInfluxDB(point);
-      }
+      insertInfluxDB(point);
+    }
   }
 
   // determine source
@@ -397,148 +466,158 @@ mqttClient.on('message', function (topic, payload) {
       }
     }
     }*/
-/*
-  // determine source
-  if (jsonObj.hasOwnProperty('sid') && jsonObj.sid !== '') {
-    source = 'esp'
-
-    for (let propName in jsonObj) {
-      const propValue = jsonObj[propName];
-    switch (propName) {
-      case 'temperature':
-        measurement = 'temperature'
-        break;
-      case 'humidity':
-        measurement = 'humidity'
-        break;
-      default:
-        console.log("noth")
-        break;
+  /*
+    // determine source
+    if (jsonObj.hasOwnProperty('sid') && jsonObj.sid !== '') {
+      source = 'esp'
+  
+      for (let propName in jsonObj) {
+        const propValue = jsonObj[propName];
+      switch (propName) {
+        case 'temperature':
+          measurement = 'temperature'
+          break;
+        case 'humidity':
+          measurement = 'humidity'
+          break;
+        default:
+          console.log("noth")
+          break;
+      }
+  
+        if (/^sid/i.test(propName)) {
+          if(typeof propValue == 'number' && !isNaN(propValue) && 
+             typeof propValue !== "undefined" && propValue !== null && propValue !== ""){
+            let point = new Point(measurement)
+              .tag('node', jsonObj.sid)
+              .tag('type', jsonObj.type)
+              .tag('source', source)
+              .floatField('value', propValue)
+            insertInfluxDB(point);
+          }
+        }
+      }
     }
-
-      if (/^sid/i.test(propName)) {
-        if(typeof propValue == 'number' && !isNaN(propValue) && 
-           typeof propValue !== "undefined" && propValue !== null && propValue !== ""){
+  */
+  if (jsonObj !== null && jsonObj !== undefined) {
+    if (jsonObj.hasOwnProperty('TID') && jsonObj.TID !== '') {
+      source = 'tasmota'
+      if (jsonObj.hasOwnProperty('DS18B20') && jsonObj.DS18B20.hasOwnProperty('Temperature')) {
+        if (typeof jsonObj.DS18B20.Temperature == 'number' && !isNaN(jsonObj.DS18B20.Temperature) &&
+          typeof jsonObj.DS18B20.Temperature !== "undefined" && jsonObj.DS18B20.Temperature !== null &&
+          jsonObj.DS18B20.Temperature !== "") {
+          measurement = 'temperature';
+          type = 'ds18b20'
           let point = new Point(measurement)
-            .tag('node', jsonObj.sid)
-            .tag('type', jsonObj.type)
+            .tag('node', jsonObj.TID)
+            .tag('type', type)
+            .tag('typeid', jsonObj.DS18B20.Id)
             .tag('source', source)
-            .floatField('value', propValue)
+            .floatField('value', jsonObj.DS18B20.Temperature)
           insertInfluxDB(point);
         }
       }
     }
-  }
-*/
-if (jsonObj !== null && jsonObj !== undefined) {
-  if (jsonObj.hasOwnProperty('TID') && jsonObj.TID !== '') {
-    source = 'tasmota'
-    if (jsonObj.hasOwnProperty('DS18B20') && jsonObj.DS18B20.hasOwnProperty('Temperature')) {
-      if(typeof jsonObj.DS18B20.Temperature == 'number' && !isNaN(jsonObj.DS18B20.Temperature) && 
-         typeof jsonObj.DS18B20.Temperature !== "undefined" && jsonObj.DS18B20.Temperature !== null &&
-         jsonObj.DS18B20.Temperature !== ""){
-        measurement = 'temperature';
-        type = 'ds18b20'
-        let point = new Point(measurement)
-        .tag('node', jsonObj.TID)
-        .tag('type', type)
-        .tag('typeid', jsonObj.DS18B20.Id)
-        .tag('source', source)
-        .floatField('value', jsonObj.DS18B20.Temperature)
-        insertInfluxDB(point);
-      }
-    }
-  }
-  // determine source
-  if (jsonObj.hasOwnProperty('N') && jsonObj.N !== '') {
-    source = '868'
+    // determine source
+    if (jsonObj.hasOwnProperty('N') && jsonObj.N !== '') {
+      source = '868'
 
-    for (let propName in jsonObj) {
-      const propValue = jsonObj[propName];
+      for (let propName in jsonObj) {
+        const propValue = jsonObj[propName];
 
-    // determine sensor type
-    if (/^[T,H,P,Q]\d/i.test(propName)) {
-      if (propName.endsWith('1')) {
-        type = 'si7021'
-      } else if (propName.endsWith('2')) {
-        type = 'ds18b20'
-      } else if (propName.endsWith('3')) {
-        type = 'bmp280'
-      } else if (propName.endsWith('4')) {
-        type = 'bme680'
-      } else {
-        type = "unknown"
-      }
-    }
+        // determine sensor type
+        if (/^[M,S,T,H,P,Q]\d/i.test(propName)) {
+          if (propName.startsWith('M')) {
+            type = 'pir'
+          } else if (propName.startsWith('S')) {
+            type = 'switch'
+          } else if (propName.endsWith('1')) {
+            type = 'si7021'
+          } else if (propName.endsWith('2')) {
+            type = 'ds18b20'
+          } else if (propName.endsWith('3')) {
+            type = 'bmp280'
+          } else if (propName.endsWith('4')) {
+            type = 'bme680'
+          } else {
+            type = "unknown"
+          }
+        }
 
-    // determine sensor measurement
-    if (/^[T]\d/i.test(propName)) {
-      measurement = 'temperature';
-    } else if (/^[H]\d/i.test(propName)) {
-      measurement = 'humidity';
-    } else if (/^[P]\d/i.test(propName)) {
-      measurement = 'pressure';
-    } else if (/^[V]\d/i.test(propName)) {
-      measurement = 'voltage';
-    } else if (/^[Q]\d/i.test(propName)) {
-      measurement = 'air_quality';
-    } else if (/^[RSSI]/i.test(propName)) {
-      measurement = 'rssi';
-    } else if (/^[LQI]/i.test(propName)) {
-      measurement = 'lqi';
-    } else {
-      measurement = 'unknown';
-    }
+        // determine sensor measurement
+        if (/^[T]\d/i.test(propName)) {
+          measurement = 'temperature';
+        } else if (/^[H]\d/i.test(propName)) {
+          measurement = 'humidity';
+        } else if (/^[P]\d/i.test(propName)) {
+          measurement = 'pressure';
+        } else if (/^[V]\d/i.test(propName)) {
+          measurement = 'voltage';
+        } else if (/^[Q]\d/i.test(propName)) {
+          measurement = 'air_quality';
+        } else if (/^[M]\d/i.test(propName)) {
+          measurement = 'motion';
+        } else if (/^[S]\d/i.test(propName)) {
+          measurement = 'switch';
+        } else if (/^[RSSI]/i.test(propName)) {
+          measurement = 'rssi';
+        } else if (/^[LQI]/i.test(propName)) {
+          measurement = 'lqi';
+        } else {
+          measurement = 'unknown';
+        }
 
-    if (/^[T,H,P]\d/i.test(propName)) {
-      if(typeof propValue == 'number' && !isNaN(propValue) && 
-         typeof propValue !== "undefined" && propValue !== null && propValue !== ""){
-        let point = new Point(measurement)
-        .tag('node', jsonObj.N)
-        .tag('node_receiver', jsonObj.RN)
-        .tag('type', type)
-        .tag('source', source)
-        .floatField('value', propValue)
-        insertInfluxDB(point);
+        // float
+        if (/^[T,H,P]\d/i.test(propName)) {
+          if (typeof propValue == 'number' && !isNaN(propValue) &&
+            typeof propValue !== "undefined" && propValue !== null && propValue !== "") {
+            let point = new Point(measurement)
+              .tag('node', jsonObj.N)
+              .tag('node_receiver', jsonObj.RN)
+              .tag('type', type)
+              .tag('source', source)
+              .floatField('value', propValue)
+            insertInfluxDB(point);
+          }
+          // integer
+        } else if (/^[Q,M,S]\d/i.test(propName)) {
+          if (typeof propValue == 'number' && !isNaN(propValue) && Number.isInteger(propValue) &
+            typeof propValue !== "undefined" && propValue !== null && propValue !== "") {
+            let point = new Point(measurement)
+              .tag('node', jsonObj.N)
+              .tag('node_receiver', jsonObj.RN)
+              .tag('type', type)
+              .tag('source', source)
+              .intField('value', propValue)
+            insertInfluxDB(point);
+          }
+        } else if (/^[V]\d/i.test(propName)) {
+          if (typeof propValue == 'number' && !isNaN(propValue) &&
+            typeof propValue !== "undefined" && propValue !== null && propValue !== "") {
+            let point = new Point(measurement)
+              .tag('node', jsonObj.N)
+              .tag('node_receiver', jsonObj.RN)
+              .tag('source', source)
+              .floatField('value', propValue)
+            insertInfluxDB(point);
+          }
+        } else if (/^[RSSI,LQI]/i.test(propName)) {
+          if (typeof propValue == 'number' && !isNaN(propValue) && Number.isInteger(propValue) &&
+            typeof propValue !== "undefined" && propValue !== null && propValue !== "") {
+            let point = new Point(measurement)
+              .tag('node', jsonObj.N)
+              .tag('node_receiver', jsonObj.RN)
+              .tag('source', source)
+              .intField('value', propValue)
+            insertInfluxDB(point);
+          }
+        } else {
+          // console.log('nothing to do')
+        }
       }
-    } else if (/^[Q]\d/i.test(propName)) {
-      if(typeof propValue == 'number' && !isNaN(propValue) && Number.isInteger(propValue) &
-         typeof propValue !== "undefined" && propValue !== null && propValue !== ""){
-        let point = new Point(measurement)
-        .tag('node', jsonObj.N)
-        .tag('node_receiver', jsonObj.RN)
-        .tag('type', type)
-        .tag('source', source)
-        .intField('value', propValue)
-        insertInfluxDB(point);
-      }
-    } else if (/^[V]\d/i.test(propName)) {
-      if(typeof propValue == 'number' && !isNaN(propValue) && 
-         typeof propValue !== "undefined" && propValue !== null && propValue !== ""){
-        let point = new Point(measurement)
-        .tag('node', jsonObj.N)
-        .tag('node_receiver', jsonObj.RN)
-        .tag('source', source)
-        .floatField('value', propValue)
-        insertInfluxDB(point);
-      }
-    } else if (/^[RSSI,LQI]/i.test(propName)) {
-      if(typeof propValue == 'number' && !isNaN(propValue) && Number.isInteger(propValue) &&
-         typeof propValue !== "undefined" && propValue !== null && propValue !== ""){
-        let point = new Point(measurement)
-        .tag('node', jsonObj.N)
-        .tag('node_receiver', jsonObj.RN)
-        .tag('source', source)
-        .intField('value', propValue)
-        insertInfluxDB(point);
-      }
-    } else {
-        // console.log('nothing to do')
-    }
     }
   }
-}
-  
+
 })
 
 
