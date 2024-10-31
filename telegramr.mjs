@@ -5,7 +5,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
 // https://github.com/yagop/node-telegram-bot-api/issues/1071
 process.env.NTBA_FIX_350 = true;
 
-import { showTimestamp, mqttAddress, devices, tgToken, tgMsgId, wcUrl1 } from './env.mjs'
+import { showTimestamp, mqttAddress, devices, tgToken, tgMsgId, wcUrl1, wcUrl2 } from './env.mjs'
 
 import * as mqtt from 'mqtt'
 import dayjs from "dayjs";
@@ -58,6 +58,14 @@ function getDeviceStatus(statusCode) {
 
 function getPortalStatus(statusCode) {
   return statusCode === 0 ? 'OPENED' : statusCode === 1 ? 'CLOSED' : 'unknown';
+}
+
+function getPirStatus(statusCode) {
+  return statusCode === 0 ? 'SLEEP' : statusCode === 1 ? 'DETECTED' : 'unknown';
+}
+
+function getMwStatus(statusCode) {
+  return statusCode === 0 ? 'DETECTED' : statusCode === 1 ? 'SLEEP' : 'unknown';
 }
 
 function getTime() {
@@ -151,10 +159,24 @@ mqttClient.on('message', function(topic, payload) {
             }
             // DEBUG
             //debug(getTime() + 'portals: ' + Object.entries(portals).map(([key, value]) => `${key}: ${value}`).join(', '));
+          /*} else if (['GDP', 'HDP'].includes(topic.toString().split('/')[2])) {
+            if (portals[topic.toString().split('/')[2]] != jsonObj.state.toString()) {
+              portals[topic.toString().split('/')[2]] = jsonObj.state
+              sendTelegram('Portal: ' + topic.toString().split('/')[2] + ' ' + getPirStatus(jsonObj.state))
+            }*/
+          } else if (['GDMW1', 'GDMW2', 'HDMW1', 'GDMMW2'].includes(topic.toString().split('/')[2])) {
+            if (portals[topic.toString().split('/')[2]] != jsonObj.state.toString()) {
+              portals[topic.toString().split('/')[2]] = jsonObj.state
+              sendTelegram('Portal: ' + topic.toString().split('/')[2] + ' ' + getMwStatus(jsonObj.state))
+            }
+          } else {
+            if (['RADAR'].includes(topic.toString().split('/')[2])) {
+              sendTelegram(topic.toString().split('/')[2] + ': ' + jsonObj.state)
+            }
           }
         }
       }
-      // RFID uid
+      // RFID/FPRINT uid
       if (typeof jsonObj.uid !== "undefined" && jsonObj.uid !== null && jsonObj.uid !== "") {
         //sendTelegram('RFID: ' + topic.toString().split('/')[2] + ' ' + jsonObj.uid.toString())
         //if (jsonObj.uid > 0 && jsonObj.uid < 10)

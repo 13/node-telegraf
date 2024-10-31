@@ -7,7 +7,7 @@ import dayjs from "dayjs";
 import chalk from 'chalk';
 
 // MQTT server details
-const mqttServer1 = 'mqtt://192.168.22.5:1881';
+const mqttServer1 = 'mqtt://192.168.22.5:1881'; // wrapper
 const mqttServer2 = 'mqtt://192.168.22.5:1883';
 const mqttTopic = 'muh/sensors/#';
 // const mqttTopic2 = 'muh/esp/#';

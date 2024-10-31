@@ -499,6 +499,9 @@ mqttClient.on('message', function(topic, payload) {
       }
     }
   */
+  // DS18B20 multi
+  // TODO
+  // DS18B20
   if (jsonObj !== null && jsonObj !== undefined) {
     if (jsonObj.hasOwnProperty('TID') && jsonObj.TID !== '') {
       source = 'tasmota'
