@@ -2,10 +2,8 @@
 
 * mqttwrappr
         A simple **MQTT** wrapper to filter sensor data from multiple esp32-cc1101 receivers
-  
 * telegrafr
         Save sensor data to **InfluxDB**
-    
 * telegramr
         Send sensor data to **Telegram**
 
