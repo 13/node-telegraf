@@ -248,7 +248,7 @@ mqttClient.on('message', function(topic, payload) {
     deviceNames = {
       //'a07': 'Garten'
       //'33c': 'Stiege',
-      '4f6': 'Post'
+      '4f6': 'GarageOpenerTouran'
     };
     deviceName = topic.split("/")[2].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     regexPattern = new RegExp("^" + topic.replace(/\//g, "\\/") + "$");
@@ -259,21 +259,20 @@ mqttClient.on('message', function(topic, payload) {
       //if (deviceNames.includes(topic.toString().split('/')[2])) {
       if (deviceNames.hasOwnProperty(topic.toString().split('/')[2])) {
         deviceName = topic.split("/")[2];
+        if (jsonObj.hasOwnProperty("S1") && typeof jsonObj.S1 == 'number' && !isNaN(jsonObj.S1) && Number.isInteger(jsonObj.S1) &&
+          typeof jsonObj.S1 !== "undefined" && jsonObj.S1 !== null && jsonObj.S1 !== "") {
+          if (jsonObj.S1) {
+            if (deviceNames.hasOwnProperty(deviceName)) {
+              sendTelegram(deviceName + ': ' + deviceNames[deviceName] + ' ' + jsonObj.S1.toString());
+            }
+          }
+        }
         if (jsonObj.hasOwnProperty("M1") && typeof jsonObj.M1 == 'number' && !isNaN(jsonObj.M1) && Number.isInteger(jsonObj.M1) &&
           typeof jsonObj.M1 !== "undefined" && jsonObj.M1 !== null && jsonObj.M1 !== "") {
           if (jsonObj.M1) {
             if (deviceNames.hasOwnProperty(deviceName)) {
               sendTelegram(deviceName + ': ' + deviceNames[deviceName] + ' ' + jsonObj.M1.toString());
             }
-            /*if (deviceName === deviceNames[2]) {
-              sendTelegram(deviceName + ': Post ' + jsonObj.M1.toString());
-            } else if (deviceName === deviceNames[1]) {
-              sendTelegram(deviceName + ': Stiege ' + jsonObj.M1.toString());
-            } else if (deviceName === deviceNames[0]) {
-              sendTelegram(deviceName + ': Garten ' + jsonObj.M1.toString()); // a07
-            } else {
-              sendTelegram(deviceName + ': ' + jsonObj.M1.toString());
-            }*/
           }
         }
       }
