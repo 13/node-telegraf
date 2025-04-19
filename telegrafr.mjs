@@ -351,53 +351,6 @@ mqttClient.on("message", function (topic, payload) {
     }
   }*/
 
-  // tasmota 3em
-  if (/^muh\/power\/3em.+/.test(topic)) {
-    source = "tasmota";
-    let measurement = "";
-    let measurementValue = "";
-    if (jsonObj !== undefined && jsonObj !== null && jsonObj !== "") {
-      if (jsonObj.hasOwnProperty("total")) {
-        //console.log(getTime() + 'mqtt: ' + chalk.yellow(jsonObj.total.toString()) + ' 3em');
-        measurement = "power";
-        measurementValue = parseFloat(jsonObj.total.toString());
-        if (
-          measurement !== undefined ||
-          measurement !== null ||
-          measurement !== "" ||
-          measurementValue !== undefined ||
-          measurementValue !== null ||
-          measurementValue !== ""
-        ) {
-          let point = new Point(measurement)
-            .tag("node", "3em")
-            .tag("source", source)
-            .floatField("value", measurementValue);
-          insertInfluxDB(point);
-        }
-      }
-      if (jsonObj.hasOwnProperty("total_zero")) {
-        //console.log(getTime() + 'mqtt: ' + chalk.yellow(jsonObj.total_zero.toString()) + ' 3em');
-        measurement = "power_zero";
-        measurementValue = parseInt(jsonObj.total_zero.toString());
-        if (
-          measurement !== undefined ||
-          measurement !== null ||
-          measurement !== "" ||
-          measurementValue !== undefined ||
-          measurementValue !== null ||
-          measurementValue !== ""
-        ) {
-          let point = new Point(measurement)
-            .tag("node", "3em")
-            .tag("source", source)
-            .intField("value", measurementValue);
-          insertInfluxDB(point);
-        }
-      }
-    }
-  }
-
   // tasmota power
   if (/^tasmota\/tele\/.+/.test(topic)) {
     source = "tasmota";
@@ -426,6 +379,7 @@ mqttClient.on("message", function (topic, payload) {
           insertInfluxDB(point);
         }
       }
+      // 3EM Total
       if (
         jsonObj.hasOwnProperty("ENERGY") &&
         jsonObj.ENERGY.hasOwnProperty("Total")
@@ -448,6 +402,76 @@ mqttClient.on("message", function (topic, payload) {
           insertInfluxDB(point);
         }
       }
+      // 3EM Today
+      if (
+        jsonObj.hasOwnProperty("ENERGY") &&
+        jsonObj.ENERGY.hasOwnProperty("Today")
+      ) {
+        //console.log(getTime() + 'mqtt: ' + chalk.yellow(jsonObj.ENERGY.Today.toString()) + ' ' + topic.toString().match(/tasmota_(\w+)/)?.[1]);
+        measurement = "kwhtoday";
+        measurementValue = parseFloat(jsonObj.ENERGY.Today.toString());
+        if (
+          measurement !== undefined ||
+          measurement !== null ||
+          measurement !== "" ||
+          measurementValue !== undefined ||
+          measurementValue !== null ||
+          measurementValue !== ""
+        ) {
+          let point = new Point(measurement)
+            .tag("node", topic.toString().match(/tasmota_(\w+)/)?.[1])
+            .tag("source", source)
+            .floatField("value", measurementValue);
+          insertInfluxDB(point);
+        }
+      }
+      // 3EM Export 
+      if (
+        jsonObj.hasOwnProperty("ENERGY") &&
+        jsonObj.ENERGY.hasOwnProperty("TodaySumExport")
+      ) {
+        //console.log(getTime() + 'mqtt: ' + chalk.yellow(jsonObj.ENERGY.TodaySumExport.toString()) + ' ' + topic.toString().match(/tasmota_(\w+)/)?.[1]);
+        measurement = "kwhexport";
+        measurementValue = parseFloat(jsonObj.ENERGY.TodaySumExport.toString());
+        if (
+          measurement !== undefined ||
+          measurement !== null ||
+          measurement !== "" ||
+          measurementValue !== undefined ||
+          measurementValue !== null ||
+          measurementValue !== ""
+        ) {
+          let point = new Point(measurement)
+            .tag("node", topic.toString().match(/tasmota_(\w+)/)?.[1])
+            .tag("source", source)
+            .floatField("value", measurementValue);
+          insertInfluxDB(point);
+        }
+      }
+      // 3EM Import
+      if (
+        jsonObj.hasOwnProperty("ENERGY") &&
+        jsonObj.ENERGY.hasOwnProperty("TodaySumImport")
+      ) {
+        //console.log(getTime() + 'mqtt: ' + chalk.yellow(jsonObj.ENERGY.TodaySumImport.toString()) + ' ' + topic.toString().match(/tasmota_(\w+)/)?.[1]);
+        measurement = "kwhimport";
+        measurementValue = parseFloat(jsonObj.ENERGY.TodaySumImport.toString());
+        if (
+          measurement !== undefined ||
+          measurement !== null ||
+          measurement !== "" ||
+          measurementValue !== undefined ||
+          measurementValue !== null ||
+          measurementValue !== ""
+        ) {
+          let point = new Point(measurement)
+            .tag("node", topic.toString().match(/tasmota_(\w+)/)?.[1])
+            .tag("source", source)
+            .floatField("value", measurementValue);
+          insertInfluxDB(point);
+        }
+      }
+      // 3EM
     } else {
       console.log(
         getTime() +
