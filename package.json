@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@influxdata/influxdb-client": "^1.33.2",
+    "axios": "^1.8.4",
     "chalk": "^5.2.0",
     "dayjs": "^1.11.7",
     "image-downloader": "^4.3.0",
