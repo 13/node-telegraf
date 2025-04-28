@@ -12,10 +12,10 @@
 
 ### Run
 ```
-pm2 start mqttwrappr.mjs
-pm2 start telegrafr.mjs
-pm2 start telegramr.mjs
-pm2 start telegrafr-pv.mjs
+pm2 start mqttwrappr.mjs --log /dev/null --error /dev/null
+pm2 start telegrafr.mjs --log /dev/null --error /dev/null
+pm2 start telegramr.mjs --log /dev/null --error /dev/null
+pm2 start telegrafr-pv.mjs --log /dev/null --error /dev/null
 ```
 
 ### Auto Start at System Boot
